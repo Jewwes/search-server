@@ -6,7 +6,7 @@
 #include <string>
 #include <utility>
 #include <vector>
-
+#include <numeric>
 using namespace std;
 
 const int MAX_RESULT_DOCUMENT_COUNT = 5;
@@ -80,11 +80,12 @@ vector<Document> FindTopDocuments(const string& raw_query, Predicate predicate) 
     const Query query = ParseQuery(raw_query);
     vector<Document> matched_documents = FindAllDocuments(query, predicate);
 
-    sort(matched_documents.begin(), matched_documents.end(),
-         [](const Document& lhs, const Document& rhs) {
-             return lhs.relevance > rhs.relevance ||
-                    (lhs.relevance == rhs.relevance && lhs.rating > rhs.rating);
-         });
+sort(matched_documents.begin(), matched_documents.end(),
+     [](const Document& lhs, const Document& rhs) {
+         return lhs.relevance > rhs.relevance ||
+                (abs(lhs.relevance - rhs.relevance) < 1e-9 && lhs.rating > rhs.rating);
+     });
+
 
     if (matched_documents.size() > MAX_RESULT_DOCUMENT_COUNT) {
         matched_documents.resize(MAX_RESULT_DOCUMENT_COUNT);
@@ -94,9 +95,7 @@ vector<Document> FindTopDocuments(const string& raw_query, Predicate predicate) 
 }
 
 vector<Document> FindTopDocuments(const string& raw_query) const {
-    return FindTopDocuments(raw_query, [](int document_id, DocumentStatus status, int) {
-        return status == DocumentStatus::ACTUAL;  
-    });
+    return FindTopDocuments(raw_query, DocumentStatus::ACTUAL);
 }
     
     vector<Document> FindTopDocuments(const string& raw_query, DocumentStatus status) const {
@@ -158,16 +157,12 @@ private:
         return words;
     }
 
-    static int ComputeAverageRating(const vector<int>& ratings) {
-        if (ratings.empty()) {
-            return 0;
-        }
-        int rating_sum = 0;
-        for (const int rating : ratings) {
-            rating_sum += rating;
-        }
-        return rating_sum / static_cast<int>(ratings.size());
+static int ComputeAverageRating(const vector<int>& ratings) {
+    if (ratings.empty()) {
+        return 0;
     }
+    return accumulate(ratings.begin(), ratings.end(), 0) / static_cast<int>(ratings.size());
+}
 
     struct QueryWord {
         string data;
