@@ -113,37 +113,29 @@ public:
     }
 
 template <typename DocumentPredicate>
-    vector<Document> FindTopDocuments(const string& raw_query, DocumentPredicate document_predicate) const {
-        const Query query = ParseQuery(raw_query);
-        for(const auto& word : query.minus_words){
-            if(word.empty() || word[0] == '-'){
-                throw invalid_argument("Not top document");
-            }
-            if(!IsValidWord(word)){
-                throw invalid_argument("Not top document");
-            }
+vector<Document> FindTopDocuments(const string& raw_query, DocumentPredicate document_predicate) const {
+    const Query query = ParseQuery(raw_query);
+    
+        if (ValidQuery(query) == false) {
+            throw invalid_argument("Invalid word ");
         }
+    auto matched_documents = FindAllDocuments(query, document_predicate);
 
-        for(const auto& word : query.plus_words){
-            if(!IsValidWord(word)){
-                throw invalid_argument("Not top document");
-            }
-        }
-        auto matched_documents = FindAllDocuments(query, document_predicate);
+    sort(matched_documents.begin(), matched_documents.end(),
+         [](const Document& lhs, const Document& rhs) {
+             if (abs(lhs.relevance - rhs.relevance) < EPSILON) {
+                 return lhs.rating > rhs.rating;
+             }
+             return lhs.relevance > rhs.relevance;
+         });
 
-sort(matched_documents.begin(), matched_documents.end(),
-     [](const Document& lhs, const Document& rhs) {
-         if (abs(lhs.relevance - rhs.relevance) < EPSILON) {
-             return lhs.rating > rhs.rating;
-         }
-         return lhs.relevance > rhs.relevance;
-     });
-
-        if (matched_documents.size() > MAX_RESULT_DOCUMENT_COUNT) {
-            matched_documents.resize(MAX_RESULT_DOCUMENT_COUNT);
-        }
-        return matched_documents;
+    if (matched_documents.size() > MAX_RESULT_DOCUMENT_COUNT) {
+        matched_documents.resize(MAX_RESULT_DOCUMENT_COUNT);
     }
+
+    return matched_documents;
+}
+
 
     vector<Document> FindTopDocuments(const string& raw_query, DocumentStatus status) const {
         return FindTopDocuments(
@@ -174,9 +166,7 @@ sort(matched_documents.begin(), matched_documents.end(),
         }
 
         for (const string &word: query.plus_words) {
-            if(!IsValidWord(word)){
-               throw invalid_argument("Not matched");
-            }
+            ParseQueryWord(word);
             if (word_to_document_freqs_.count(word) == 0) {
                 continue;
             }
@@ -249,15 +239,24 @@ private:
         bool is_stop;
     };
 
-    QueryWord ParseQueryWord(string text) const {
-        bool is_minus = false;
-        // Word shouldn't be empty
-        if (text[0] == '-') {
-            is_minus = true;
-            text = text.substr(1);
-        }
-        return {text, is_minus, IsStopWord(text)};
-    }
+QueryWord ParseQueryWord(string text) const {
+bool is_minus = false;
+
+if (text.empty()) {
+    throw invalid_argument("Invalid empty word");
+}
+
+if (!IsValidWord(text)) {
+    throw invalid_argument("Invalid word: " + text);
+}
+
+if (text[0] == '-') {
+    is_minus = true;
+    text = text.substr(1);
+}
+
+return {text, is_minus, IsStopWord(text)};
+}
 
     struct Query {
         set<string> plus_words;
@@ -317,4 +316,19 @@ private:
         }
         return matched_documents;
     }
+   bool ValidQuery(const Query& query) const {
+    for (const string& word : query.plus_words) {
+        if ((!IsValidWord(word)) || (word.back() == '-')) {
+            return false;
+        }
+    }
+ 
+    for (const string& word : query.minus_words) {
+        if (word.empty() || word[0] == '-' || (!IsValidWord(word)) || (word.back() == '-')) {
+            return false;
+        }
+    }
+ 
+    return true;
+}
 };
