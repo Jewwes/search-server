@@ -8,8 +8,9 @@
 #include <vector>
 #include <stdexcept>
 #include <optional>
+#include <numeric> 
 using namespace std;
-
+const double EPSILON = 1e-6;
 const int MAX_RESULT_DOCUMENT_COUNT = 5;
 
 string ReadLine() {
@@ -82,19 +83,16 @@ public:
     template <typename StringContainer>
     explicit SearchServer(const StringContainer& stop_words)
         : stop_words_(MakeUniqueNonEmptyStrings(stop_words)) {
-        for (const string& word : stop_words_) {
-            if (!IsValidWord(word)) {
-                throw invalid_argument("Invalid word in stop_words");
-            }
+        if (!all_of(stop_words_.begin(), stop_words_.end(), IsValidWord)) {
+            throw invalid_argument("Invalid word in stop_words");
         }
     }
 
     explicit SearchServer(const string& stop_words_text)
         : SearchServer(
-              SplitIntoWords(stop_words_text))  // Invoke delegating constructor from string container
+              SplitIntoWords(stop_words_text)) 
     {
     }
-
 
  void AddDocument(int document_id, const string& document, DocumentStatus status, const vector<int>& ratings) {
         const vector<string> words = SplitIntoWordsNoStop(document);
@@ -133,14 +131,14 @@ template <typename DocumentPredicate>
         }
         auto matched_documents = FindAllDocuments(query, document_predicate);
 
-        sort(matched_documents.begin(), matched_documents.end(),
-             [](const Document& lhs, const Document& rhs) {
-                 if (abs(lhs.relevance - rhs.relevance) < 1e-6) {
-                     return lhs.rating > rhs.rating;
-                 } else {
-                     return lhs.relevance > rhs.relevance;
-                 }
-             });
+sort(matched_documents.begin(), matched_documents.end(),
+     [](const Document& lhs, const Document& rhs) {
+         if (abs(lhs.relevance - rhs.relevance) < EPSILON) {
+             return lhs.rating > rhs.rating;
+         }
+         return lhs.relevance > rhs.relevance;
+     });
+
         if (matched_documents.size() > MAX_RESULT_DOCUMENT_COUNT) {
             matched_documents.resize(MAX_RESULT_DOCUMENT_COUNT);
         }
@@ -202,7 +200,7 @@ int GetDocumentId(int index) const {
     if (index < 0 || index >= num_id.size()) {
         throw out_of_range("Index out of range");
     }
-    return num_id[index];
+    return num_id.at(index);
 }
 
 private:
@@ -320,4 +318,3 @@ private:
         return matched_documents;
     }
 };
-
