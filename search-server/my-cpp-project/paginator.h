@@ -20,7 +20,7 @@ public:
 
 
     size_t size() const {
-        return size_;
+        return distance(begin_, end_);
     }
 
 private:
